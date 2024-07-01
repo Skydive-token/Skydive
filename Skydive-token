@@ -1,0 +1,99 @@
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+
+	"github.com/hyperledger/fabric-contract-api-go/contractapi"
+)
+
+// TokenContract provides functions for managing a token
+type TokenContract struct {
+	contractapi.Contract
+}
+
+// Token describes basic details of a token
+type Token struct {
+	Name        string            `json:"name"`
+	Symbol      string            `json:"symbol"`
+	TotalSupply int               `json:"totalSupply"`
+	Balance     map[string]int    `json:"balance"`
+}
+
+// InitLedger initializes the ledger with a token
+func (t *TokenContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
+	token := Token{
+		Name:        "SkyDive",
+		Symbol:      "SKD",
+		TotalSupply: 1000000,
+		Balance:     make(map[string]int),
+	}
+
+	token.Balance["admin"] = token.TotalSupply
+
+	tokenJSON, err := json.Marshal(token)
+	if err != nil {
+		return err
+	}
+
+	return ctx.GetStub().PutState("TOKEN", tokenJSON)
+}
+
+// Transfer transfers tokens from one account to another
+func (t *TokenContract) Transfer(ctx contractapi.TransactionContextInterface, from string, to string, amount int) error {
+	tokenJSON, err := ctx.GetStub().GetState("TOKEN")
+	if err != nil {
+		return err
+	}
+
+	var token Token
+	err = json.Unmarshal(tokenJSON, &token)
+	if err != nil {
+		return err
+	}
+
+	if token.Balance[from] < amount {
+		return fmt.Errorf("insufficient balance")
+	}
+
+	token.Balance[from] -= amount
+	token.Balance[to] += amount
+
+	tokenJSON, err = json.Marshal(token)
+	if err != nil {
+		return err
+	}
+
+	return ctx.GetStub().PutState("TOKEN", tokenJSON)
+}
+
+// GetBalance returns the balance of a given account
+func (t *TokenContract) GetBalance(ctx contractapi.TransactionContextInterface, account string) (int, error) {
+	tokenJSON, err := ctx.GetStub().GetState("TOKEN")
+	if err != nil {
+		return 0, err
+	}
+
+	var token Token
+	err = json.Unmarshal(tokenJSON, &token)
+	if err != nil {
+		return 0, err
+	}
+
+	return token.Balance[account], nil
+}
+
+func main() {
+	chaincode, err := contractapi.NewChaincode(&TokenContract{})
+	if err != nil {
+		fmt.Printf("Error create token contract: %s", err.Error())
+		return
+	}
+
+	if err := chaincode.Start(); err != nil {
+		fmt.Printf("Error starting token contract: %s", err.Erryor())
+	}
+}
+```
